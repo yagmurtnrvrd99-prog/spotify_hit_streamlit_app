@@ -3,6 +3,8 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+import re
+import os
 
 ART_DIR = "artifacts"
 MODEL_PATH = f"{ART_DIR}/final_model.joblib"
@@ -15,6 +17,14 @@ def load_artifacts():
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
     return model, meta
+
+def norm_genre(s: str) -> str:
+    s = str(s).strip().lower()
+    s = s.replace("&", "and")
+    s = s.replace("_", "-")
+    s = re.sub(r"\s+", "-", s)
+    s = re.sub(r"-+", "-", s)
+    return s
 
 model, meta = load_artifacts()
 
@@ -31,13 +41,15 @@ if not FEATURES:
     st.stop()
 
 if "track_genre_freq" not in FEATURES:
-    st.error("Model feature set does not include 'track_genre_freq'. Re-export meta/model with this feature or retrain with it.")
+    st.error("Model feature set does not include 'track_genre_freq'.")
     st.stop()
 
-GENRE_FREQ_MAP = meta.get("genre_freq_map", {})
-if not GENRE_FREQ_MAP:
-    st.error("genre_freq_map not found in meta.json. Please add it (from 114k) and redeploy.")
+GENRE_FREQ_MAP_RAW = meta.get("genre_freq_map", {})
+if not GENRE_FREQ_MAP_RAW:
+    st.error("genre_freq_map not found in meta.json.")
     st.stop()
+
+GENRE_FREQ_MAP = {norm_genre(k): float(v) for k, v in GENRE_FREQ_MAP_RAW.items()}
 
 st.set_page_config(page_title="Spotify Hit Predictor", layout="wide")
 st.markdown(
@@ -63,12 +75,12 @@ if st.button("Reset"):
             del st.session_state[k]
     st.rerun()
 
-if st.session_state.get("_super_map_loaded") is None:
-    st.session_state["_super_map_loaded"] = True
-
 try:
-    with open(SUPERMAP_JSON, "r", encoding="utf-8") as f:
-        super_map = json.load(f)
+    if os.path.exists(SUPERMAP_JSON):
+        with open(SUPERMAP_JSON, "r", encoding="utf-8") as f:
+            super_map = json.load(f)
+    else:
+        raise FileNotFoundError
 except Exception:
     super_map = {
         "acoustic": "Acoustic/Folk/Country", "folk": "Acoustic/Folk/Country",
@@ -111,9 +123,15 @@ with g2:
     sub_list = [g for g in subgenres if super_map.get(g) == chosen_super]
     chosen_sub = st.selectbox("Sub-genre", sub_list, index=0)
 
-track_genre_freq = float(GENRE_FREQ_MAP.get(str(chosen_sub), 0.0))
+chosen_sub_norm = norm_genre(chosen_sub)
+track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_sub_norm, 0.0))
+
 if track_genre_freq <= 0:
-    track_genre_freq = float(np.mean(list(GENRE_FREQ_MAP.values())))
+    candidates = [g for g in sub_list if norm_genre(g) in GENRE_FREQ_MAP]
+    if candidates:
+        track_genre_freq = float(np.mean([GENRE_FREQ_MAP[norm_genre(g)] for g in candidates]))
+    else:
+        track_genre_freq = float(np.mean(list(GENRE_FREQ_MAP.values())))
 
 st.caption(f"Auto track_genre_freq: {track_genre_freq:.4f}")
 
@@ -173,7 +191,6 @@ X = pd.DataFrame([row])
 for c in FEATURES:
     if c not in X.columns:
         X[c] = 0.0
-
 X = X[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 st.divider()
@@ -190,3 +207,11 @@ if st.button("Predict"):
         st.success(f"This song would be a HIT!  (Hit probability: {hit_prob:.3f})")
     else:
         st.warning(f"This song would NOT be a hit.  (Non-hit probability: {non_hit_prob:.3f})")
+
+    if hit_prob < TH:
+        if hit_prob >= TH * 0.9:
+            st.info(f"Non-hit chance: Low  ({non_hit_prob:.3f})")
+        elif hit_prob >= TH * 0.75:
+            st.info(f"Non-hit chance: Medium  ({non_hit_prob:.3f})")
+        else:
+            st.info(f"Non-hit chance: High  ({non_hit_prob:.3f})")
