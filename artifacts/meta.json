@@ -1,0 +1,60 @@
+{
+  "model_name": "HistGB",
+  "threshold": 0.67,
+  "target_rule": "popularity >= 60",
+  "group_col": "main_artist_id",
+  "feature_columns": [
+    "duration_ms",
+    "danceability",
+    "energy",
+    "loudness",
+    "speechiness",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "valence",
+    "tempo",
+    "release_year",
+    "artist_followers",
+    "artist_popularity",
+    "track_genre_freq"
+  ],
+  "data_path_used": "/content/drive/MyDrive/İleri İstatistik Projesi/spotifydata_filtered.csv",
+  "seed": 42,
+  "random_state": 42,
+  "best_params": {
+    "min_samples_leaf": 20,
+    "max_iter": 300,
+    "max_depth": 10,
+    "learning_rate": 0.03
+  },
+  "valid": {
+    "PR_AUC": 1.0,
+    "ROC_AUC": 1.0,
+    "metrics_at_threshold": {
+      "Accuracy": 0.9973958333333334,
+      "Precision": 1.0,
+      "Recall": 0.9913793103448276,
+      "F1": 0.9956709956709957,
+      "F2": 0.9930915371329879
+    }
+  },
+  "test": {
+    "PR_AUC": 0.9571535183361484,
+    "ROC_AUC": 0.9657446771287111,
+    "metrics_at_threshold": {
+      "Accuracy": 0.9416666666666667,
+      "Precision": 0.9658536585365853,
+      "Recall": 0.9041095890410958,
+      "F1": 0.9339622641509434,
+      "F2": 0.9158186864014801
+    }
+  },
+  "environment": {
+    "python": "3.12.12",
+    "platform": "Linux-6.6.105+-x86_64-with-glibc2.35",
+    "numpy": "2.0.2",
+    "pandas": "2.2.2"
+  },
+  "created_at": "2025-12-28T20:46:32.691972"
+}
