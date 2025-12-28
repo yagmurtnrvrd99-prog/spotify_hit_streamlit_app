@@ -220,26 +220,54 @@ X = X[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 st.divider()
 
 if st.button("Predict"):
+
+    # 1) FEATURES anahtarını daha sağlam seç
+    FEATURES_SAFE = (
+        meta.get("feature_columns")
+        or meta.get("model_feature_columns")
+        or meta.get("columns")
+        or meta.get("feature_names")
+    )
+
+    if not FEATURES_SAFE:
+        st.error("Meta dosyasında feature listesi bulunamadı (feature_columns / model_feature_columns / columns / feature_names).")
+        st.write("meta keys:", list(meta.keys()))
+        st.stop()
+
+    # 2) X'i doğru sıraya sok + eksik sütunları 0 ile doldur
+    for c in FEATURES_SAFE:
+        if c not in X.columns:
+            X[c] = 0.0
+    X_use = X[FEATURES_SAFE].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    # 3) score üret
     if hasattr(model, "predict_proba"):
-        score = float(model.predict_proba(X)[:, 1][0])
+        proba = model.predict_proba(X_use)
+        score = float(proba[:, 1][0])
+        proba_row = proba[0].tolist()
     else:
-        score = float(model.decision_function(X)[0])
+        score = float(model.decision_function(X_use)[0])
+        proba_row = None
 
     hit_prob = score
     non_hit_prob = 1.0 - score
     pred = int(score >= TH)
 
-    # Show decision + probability
+    # 4) Sonucu göster (sadece ihtimal)
     if pred == 1:
         st.success(f"This song would be a HIT!  (Hit probability: {hit_prob:.3f})")
     else:
         st.warning(f"This song would NOT be a hit.  (Non-hit probability: {non_hit_prob:.3f})")
 
-    # Chance label (still useful)
-    if pred == 0:
-        if score >= TH * 0.9:
-            st.info(f"Non-hit chance: **Low**  |  score={score:.3f}")
-        elif score >= TH * 0.75:
-            st.info(f"Non-hit chance: **Medium**  |  score={score:.3f}")
-        else:
-            st.info(f"Non-hit chance: **High**  |  score={score:.3f}")
+    # 5) DEBUG (geçici) — neden hep 0 geliyor anında görürüz
+    with st.expander("DEBUG (temporary)", expanded=False):
+        st.write("TH:", TH)
+        st.write("FEATURES count:", len(FEATURES_SAFE))
+        st.write("First 10 FEATURES:", FEATURES_SAFE[:10])
+        st.write("X_use shape:", X_use.shape)
+        st.write("X_use min/max:", float(np.min(X_use.values)), float(np.max(X_use.values)))
+        if proba_row is not None:
+            st.write("predict_proba[0]:", proba_row)
+        st.write("score raw:", score)
+        st.dataframe(X_use)
+
