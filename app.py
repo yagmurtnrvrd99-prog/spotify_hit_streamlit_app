@@ -22,11 +22,11 @@ def load_artifacts():
     return model, meta
 
 model, meta = load_artifacts()
-TH = float(meta["threshold"])
-FEATURES = meta["feature_columns"]
+
+TH = float(meta.get("threshold", 0.67))
+FEATURES = meta.get("feature_columns", [])
 
 # Optional: genre frequency mapping saved in meta (if you add it later)
-# meta["genre_freq_map"] = {"country":0.05, "k-pop":0.08, ...}
 GENRE_FREQ_MAP = meta.get("genre_freq_map", {})
 
 # -----------------------------
@@ -34,7 +34,6 @@ GENRE_FREQ_MAP = meta.get("genre_freq_map", {})
 # -----------------------------
 st.set_page_config(page_title="Spotify Hit Predictor", layout="wide")
 
-# Small CSS to mimic your old layout a bit
 st.markdown(
     """
     <style>
@@ -43,7 +42,6 @@ st.markdown(
       h2 {margin-top: 1.2rem;}
       .stButton>button {border-radius: 10px; padding: 0.55rem 1.1rem;}
       .stExpander {border-radius: 14px;}
-      /* Make sliders feel closer to your old style */
       [data-baseweb="slider"] {padding-top: 0.35rem;}
     </style>
     """,
@@ -57,7 +55,6 @@ st.caption("Enter track & artist information and choose a genre.")
 # Reset button
 # -----------------------------
 if st.button("Reset"):
-    # Clear session state keys except internal
     for k in list(st.session_state.keys()):
         if not k.startswith("_"):
             del st.session_state[k]
@@ -66,7 +63,6 @@ if st.button("Reset"):
 # -----------------------------
 # Genre grouping (super_map style)
 # -----------------------------
-# You can expand/edit these groupings any time.
 super_map = {
     # Acoustic / Folk / Country
     "acoustic": "Acoustic/Folk/Country", "folk": "Acoustic/Folk/Country",
@@ -109,8 +105,6 @@ super_map = {
     "anime": "Other", "disney": "Other", "children": "Other", "comedy": "Other",
 }
 
-# If you have an allowed genre list from your dataset, put it here.
-# Otherwise we show all keys in super_map (sub-genres).
 subgenres = sorted(list(super_map.keys()))
 supergenres = sorted(list(set(super_map.values())))
 
@@ -118,16 +112,17 @@ st.header("Genre Selection")
 
 col_g1, col_g2 = st.columns(2)
 with col_g1:
-    chosen_super = st.selectbox("Genre", supergenres, index=supergenres.index("Acoustic/Folk/Country") if "Acoustic/Folk/Country" in supergenres else 0)
+    default_super = "Acoustic/Folk/Country" if "Acoustic/Folk/Country" in supergenres else supergenres[0]
+    chosen_super = st.selectbox("Genre", supergenres, index=supergenres.index(default_super))
+
 with col_g2:
     sub_list = [g for g in subgenres if super_map.get(g) == chosen_super]
     chosen_sub = st.selectbox("Sub-genre", sub_list, index=0 if len(sub_list) else None)
 
-# auto track_genre_freq from mapping (fallback 0.05)
 track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_sub, 0.05))
 
 # -----------------------------
-# Feature inputs (sections like your screenshots)
+# Basic Features
 # -----------------------------
 st.header("Basic Features")
 
@@ -137,8 +132,15 @@ with c1:
     duration_sec = st.slider("duration", min_value=30, max_value=900, value=180)
     st.caption(f"Selected: {duration_sec//60}:{duration_sec%60:02d}")
 
-    artist_followers_k = st.slider("artist_followers (K)", min_value=0, max_value=5000, value=100, step=10)
-    st.caption(f"{artist_followers_k}K = {artist_followers_k*1000:,}")
+    # UPDATED: followers slider up to 150,000K
+    artist_followers_k = st.slider(
+        "artist_followers (K)",
+        min_value=0,
+        max_value=150_000,
+        value=100,
+        step=100
+    )
+    st.caption(f"{artist_followers_k:,}K = {artist_followers_k*1000:,} followers")
 
     danceability = st.slider("danceability", 0.0, 1.0, 0.50)
     energy = st.slider("energy", 0.0, 1.0, 0.50)
@@ -150,17 +152,31 @@ with c2:
     valence = st.slider("valence", 0.0, 1.0, 0.50)
     release_year = st.slider("release_year", 1950, 2025, 2020)
 
+# -----------------------------
 # Advanced (optional)
+# -----------------------------
 with st.expander("Advanced (optional)", expanded=False):
     use_exact_duration = st.checkbox("Enter exact duration (seconds)", value=False)
     use_exact_followers = st.checkbox("Enter exact followers", value=False)
 
     if use_exact_duration:
-        duration_sec_exact = st.number_input("Exact duration (seconds)", min_value=1, max_value=36000, value=int(duration_sec), step=1)
+        duration_sec_exact = st.number_input(
+            "Exact duration (seconds)",
+            min_value=1,
+            max_value=36000,
+            value=int(duration_sec),
+            step=1
+        )
         duration_sec = int(duration_sec_exact)
 
     if use_exact_followers:
-        followers_exact = st.number_input("Exact followers", min_value=0, max_value=2_000_000_000, value=int(artist_followers_k*1000), step=1000)
+        followers_exact = st.number_input(
+            "Exact followers",
+            min_value=0,
+            max_value=2_000_000_000,
+            value=int(artist_followers_k * 1000),
+            step=1000
+        )
         artist_followers_k = int(followers_exact // 1000)
 
     speechiness = st.slider("speechiness", 0.0, 1.0, 0.05)
@@ -168,7 +184,7 @@ with st.expander("Advanced (optional)", expanded=False):
     instrumentalness = st.slider("instrumentalness", 0.0, 1.0, 0.00)
     liveness = st.slider("liveness", 0.0, 1.0, 0.15)
 
-# If advanced not opened, keep defaults (to avoid UnboundLocalError)
+# If expander not opened, keep defaults to avoid NameError
 if "speechiness" not in locals():
     speechiness, acousticness, instrumentalness, liveness = 0.05, 0.20, 0.00, 0.15
 
@@ -198,12 +214,14 @@ X = pd.DataFrame([row])
 for c in FEATURES:
     if c not in X.columns:
         X[c] = 0.0
+
 X = X[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 # -----------------------------
 # Predict
 # -----------------------------
 st.divider()
+
 if st.button("Predict"):
     if hasattr(model, "predict_proba"):
         score = float(model.predict_proba(X)[:, 1][0])
@@ -212,16 +230,17 @@ if st.button("Predict"):
 
     pred = int(score >= TH)
 
+    # UPDATED: no (score | th) text
     if pred == 1:
-        st.success(f"This song would be a HIT!  (score={score:.3f} | th={TH:.2f})")
+        st.success("This song would be a HIT!")
     else:
-        st.warning(f"This song would NOT be a hit.  (score={score:.3f} | th={TH:.2f})")
+        st.warning("This song would NOT be a hit.")
 
-    # Optional chance labels (tune as you like)
+    # Optional "non-hit chance" label (uses hidden score but doesn't display it)
     if pred == 0:
-        if score >= TH*0.9:
+        if score >= TH * 0.9:
             st.info("Non-hit chance: **Low**")
-        elif score >= TH*0.75:
+        elif score >= TH * 0.75:
             st.info("Non-hit chance: **Medium**")
         else:
             st.info("Non-hit chance: **High**")
