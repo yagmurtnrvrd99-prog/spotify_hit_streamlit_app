@@ -3,30 +3,23 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-import re
 import os
 
 ART_DIR = "artifacts"
-MODEL_PATH = f"{ART_DIR}/final_model.joblib"
-META_PATH = f"{ART_DIR}/meta.json"
-SUPERMAP_JSON = "super_map_generated.json"
+MODEL_PATH = os.path.join(ART_DIR, "final_model.joblib")
+META_PATH = os.path.join(ART_DIR, "meta.json")
+GENRE_MAP_PATH = os.path.join(ART_DIR, "genre_freq_map.json")
 
 @st.cache_resource
 def load_artifacts():
     model = joblib.load(MODEL_PATH)
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
-    return model, meta
+    with open(GENRE_MAP_PATH, "r", encoding="utf-8") as f:
+        genre_freq_map = json.load(f)
+    return model, meta, genre_freq_map
 
-def norm_genre(s: str) -> str:
-    s = str(s).strip().lower()
-    s = s.replace("&", "and")
-    s = s.replace("_", "-")
-    s = re.sub(r"\s+", "-", s)
-    s = re.sub(r"-+", "-", s)
-    return s
-
-model, meta = load_artifacts()
+model, meta, GENRE_FREQ_MAP = load_artifacts()
 
 TH = float(meta.get("threshold", 0.67))
 FEATURES = (
@@ -37,19 +30,12 @@ FEATURES = (
 )
 
 if not FEATURES:
-    st.error("Feature list not found in meta.json.")
+    st.error("Feature list not found in artifacts/meta.json")
     st.stop()
 
 if "track_genre_freq" not in FEATURES:
-    st.error("Model feature set does not include 'track_genre_freq'.")
+    st.error("Model does not include track_genre_freq. Retrain/export with this feature.")
     st.stop()
-
-GENRE_FREQ_MAP_RAW = meta.get("genre_freq_map", {})
-if not GENRE_FREQ_MAP_RAW:
-    st.error("genre_freq_map not found in meta.json.")
-    st.stop()
-
-GENRE_FREQ_MAP = {norm_genre(k): float(v) for k, v in GENRE_FREQ_MAP_RAW.items()}
 
 st.set_page_config(page_title="Spotify Hit Predictor", layout="wide")
 st.markdown(
@@ -75,72 +61,20 @@ if st.button("Reset"):
             del st.session_state[k]
     st.rerun()
 
-try:
-    if os.path.exists(SUPERMAP_JSON):
-        with open(SUPERMAP_JSON, "r", encoding="utf-8") as f:
-            super_map = json.load(f)
-    else:
-        raise FileNotFoundError
-except Exception:
-    super_map = {
-        "acoustic": "Acoustic/Folk/Country", "folk": "Acoustic/Folk/Country",
-        "country": "Acoustic/Folk/Country", "bluegrass": "Acoustic/Folk/Country",
-        "singer-songwriter": "Acoustic/Folk/Country", "songwriter": "Acoustic/Folk/Country",
-        "pop": "Pop", "indie-pop": "Pop", "synth-pop": "Pop", "k-pop": "Pop",
-        "j-pop": "Pop", "mandopop": "Pop", "cantopop": "Pop", "pop-film": "Pop",
-        "british": "Pop",
-        "hip-hop": "Hip-Hop/R&B", "rap": "Hip-Hop/R&B", "r-n-b": "Hip-Hop/R&B",
-        "soul": "Hip-Hop/R&B", "funk": "Hip-Hop/R&B",
-        "edm": "Electronic/Dance", "electronic": "Electronic/Dance", "electro": "Electronic/Dance",
-        "house": "Electronic/Dance", "deep-house": "Electronic/Dance", "techno": "Electronic/Dance",
-        "detroit-techno": "Electronic/Dance", "chicago-house": "Electronic/Dance",
-        "drum-and-bass": "Electronic/Dance", "dubstep": "Electronic/Dance",
-        "dance": "Electronic/Dance", "club": "Electronic/Dance", "disco": "Electronic/Dance",
-        "rock": "Rock/Metal", "alt-rock": "Rock/Metal", "alternative": "Rock/Metal",
-        "punk": "Rock/Metal", "punk-rock": "Rock/Metal", "hard-rock": "Rock/Metal",
-        "metal": "Rock/Metal", "black-metal": "Rock/Metal", "death-metal": "Rock/Metal",
-        "metalcore": "Rock/Metal", "grunge": "Rock/Metal", "industrial": "Rock/Metal",
-        "rock-n-roll": "Rock/Metal", "rockabilly": "Rock/Metal", "hardcore": "Rock/Metal",
-        "psych-rock": "Rock/Metal", "emo": "Rock/Metal", "garage": "Rock/Metal",
-        "classical": "Classical/Jazz", "piano": "Classical/Jazz", "jazz": "Classical/Jazz",
-        "ambient": "Classical/Jazz", "new-age": "Classical/Jazz",
-        "latin": "Latin/Reggae", "latino": "Latin/Reggae", "reggaeton": "Latin/Reggae",
-        "reggae": "Latin/Reggae", "dancehall": "Latin/Reggae", "brazil": "Latin/Reggae",
-        "anime": "Other", "disney": "Other", "children": "Other", "comedy": "Other",
-    }
-
-subgenres = sorted(super_map.keys())
-supergenres = sorted(set(super_map.values()))
+genres = sorted(GENRE_FREQ_MAP.keys())
 
 st.header("Genre Selection")
-g1, g2 = st.columns(2)
-
-with g1:
-    default_super = "Acoustic/Folk/Country" if "Acoustic/Folk/Country" in supergenres else supergenres[0]
-    chosen_super = st.selectbox("Genre", supergenres, index=supergenres.index(default_super))
-
-with g2:
-    sub_list = [g for g in subgenres if super_map.get(g) == chosen_super]
-    chosen_sub = st.selectbox("Sub-genre", sub_list, index=0)
-
-chosen_sub_norm = norm_genre(chosen_sub)
-track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_sub_norm, 0.0))
-
-if track_genre_freq <= 0:
-    candidates = [g for g in sub_list if norm_genre(g) in GENRE_FREQ_MAP]
-    if candidates:
-        track_genre_freq = float(np.mean([GENRE_FREQ_MAP[norm_genre(g)] for g in candidates]))
-    else:
-        track_genre_freq = float(np.mean(list(GENRE_FREQ_MAP.values())))
-
-st.caption(f"Auto track_genre_freq: {track_genre_freq:.4f}")
+chosen_genre = st.selectbox("track_genre", genres, index=0)
+track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_genre, 0.0))
 
 st.header("Basic Features")
 c1, c2 = st.columns(2)
 
 with c1:
     duration_sec = st.slider("duration", 30, 900, 180)
+    st.caption(f"Selected: {duration_sec//60}:{duration_sec%60:02d}")
     artist_followers_k = st.slider("artist_followers (K)", 0, 150_000, 100, step=100)
+    st.caption(f"{artist_followers_k:,}K = {artist_followers_k*1000:,} followers")
     danceability = st.slider("danceability", 0.0, 1.0, 0.50)
     energy = st.slider("energy", 0.0, 1.0, 0.50)
     loudness = st.slider("loudness", -60.0, 0.0, -8.0)
@@ -207,11 +141,3 @@ if st.button("Predict"):
         st.success(f"This song would be a HIT!  (Hit probability: {hit_prob:.3f})")
     else:
         st.warning(f"This song would NOT be a hit.  (Non-hit probability: {non_hit_prob:.3f})")
-
-    if hit_prob < TH:
-        if hit_prob >= TH * 0.9:
-            st.info(f"Non-hit chance: Low  ({non_hit_prob:.3f})")
-        elif hit_prob >= TH * 0.75:
-            st.info(f"Non-hit chance: Medium  ({non_hit_prob:.3f})")
-        else:
-            st.info(f"Non-hit chance: High  ({non_hit_prob:.3f})")
