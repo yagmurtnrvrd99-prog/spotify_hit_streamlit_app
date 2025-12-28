@@ -132,7 +132,6 @@ with c1:
     duration_sec = st.slider("duration", min_value=30, max_value=900, value=180)
     st.caption(f"Selected: {duration_sec//60}:{duration_sec%60:02d}")
 
-    # UPDATED: followers slider up to 150,000K
     artist_followers_k = st.slider(
         "artist_followers (K)",
         min_value=0,
@@ -184,12 +183,11 @@ with st.expander("Advanced (optional)", expanded=False):
     instrumentalness = st.slider("instrumentalness", 0.0, 1.0, 0.00)
     liveness = st.slider("liveness", 0.0, 1.0, 0.15)
 
-# If expander not opened, keep defaults to avoid NameError
 if "speechiness" not in locals():
     speechiness, acousticness, instrumentalness, liveness = 0.05, 0.20, 0.00, 0.15
 
 # -----------------------------
-# Build model row (MODEL expects duration_ms, artist_followers, ...)
+# Build model row
 # -----------------------------
 row = {
     "duration_ms": float(duration_sec) * 1000.0,
@@ -210,7 +208,6 @@ row = {
 
 X = pd.DataFrame([row])
 
-# Ensure all expected columns exist + correct order
 for c in FEATURES:
     if c not in X.columns:
         X[c] = 0.0
@@ -228,19 +225,21 @@ if st.button("Predict"):
     else:
         score = float(model.decision_function(X)[0])
 
+    hit_prob = score
+    non_hit_prob = 1.0 - score
     pred = int(score >= TH)
 
-    # UPDATED: no (score | th) text
+    # Show decision + probability
     if pred == 1:
-        st.success("This song would be a HIT!")
+        st.success(f"This song would be a HIT!  (Hit probability: {hit_prob:.3f})")
     else:
-        st.warning("This song would NOT be a hit.")
+        st.warning(f"This song would NOT be a hit.  (Non-hit probability: {non_hit_prob:.3f})")
 
-    # Optional "non-hit chance" label (uses hidden score but doesn't display it)
+    # Chance label (still useful)
     if pred == 0:
         if score >= TH * 0.9:
-            st.info("Non-hit chance: **Low**")
+            st.info(f"Non-hit chance: **Low**  |  score={score:.3f}")
         elif score >= TH * 0.75:
-            st.info("Non-hit chance: **Medium**")
+            st.info(f"Non-hit chance: **Medium**  |  score={score:.3f}")
         else:
-            st.info("Non-hit chance: **High**")
+            st.info(f"Non-hit chance: **High**  |  score={score:.3f}")
