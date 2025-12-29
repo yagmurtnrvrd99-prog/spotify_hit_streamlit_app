@@ -45,13 +45,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+if "reset_nonce" not in st.session_state:
+    st.session_state["reset_nonce"] = 0
+
+def do_reset():
+    keep = {"reset_nonce"}
+    for k in list(st.session_state.keys()):
+        if k not in keep:
+            del st.session_state[k]
+    st.session_state["reset_nonce"] += 1
+
 st.title("Spotify Hit Predictor")
 st.caption("Enter track & artist information and choose a genre.")
 
-if st.button("Reset"):
-    for k in list(st.session_state.keys()):
-        if not k.startswith("_"):
-            del st.session_state[k]
+if st.button("Reset", on_click=do_reset):
     st.rerun()
 
 super_map = {
@@ -96,12 +103,12 @@ g1, g2 = st.columns(2)
 
 with g1:
     default_super = "Pop" if "Pop" in supergenres else supergenres[0]
-    chosen_super = st.selectbox("Super genre", supergenres, index=supergenres.index(default_super))
+    chosen_super = st.selectbox("Super genre", supergenres, index=supergenres.index(default_super), key=f"super_{st.session_state['reset_nonce']}")
 
 with g2:
     sub_list = [g for g in genres if super_map.get(g, "Other") == chosen_super]
     sub_list = sub_list if sub_list else genres
-    chosen_genre = st.selectbox("track_genre", sub_list, index=0)
+    chosen_genre = st.selectbox("track_genre", sub_list, index=0, key=f"genre_{st.session_state['reset_nonce']}")
 
 track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_genre, 0.0))
 
@@ -109,35 +116,35 @@ st.header("Basic Features")
 c1, c2 = st.columns(2)
 
 with c1:
-    duration_sec = st.slider("duration", 30, 900, 180)
+    duration_sec = st.slider("duration", 30, 900, 180, key=f"duration_{st.session_state['reset_nonce']}")
     st.caption(f"Selected: {duration_sec//60}:{duration_sec%60:02d}")
-    artist_followers_k = st.slider("artist_followers (K)", 0, 150_000, 100, step=100)
+    artist_followers_k = st.slider("artist_followers (K)", 0, 150_000, 100, step=100, key=f"followers_{st.session_state['reset_nonce']}")
     st.caption(f"{artist_followers_k:,}K = {artist_followers_k*1000:,} followers")
-    danceability = st.slider("danceability", 0.0, 1.0, 0.50)
-    energy = st.slider("energy", 0.0, 1.0, 0.50)
-    loudness = st.slider("loudness", -60.0, 0.0, -8.0)
+    danceability = st.slider("danceability", 0.0, 1.0, 0.50, key=f"dance_{st.session_state['reset_nonce']}")
+    energy = st.slider("energy", 0.0, 1.0, 0.50, key=f"energy_{st.session_state['reset_nonce']}")
+    loudness = st.slider("loudness", -30.0, 0.0, -8.0, key=f"loud_{st.session_state['reset_nonce']}")
 
 with c2:
-    tempo = st.slider("tempo", 40.0, 220.0, 120.0)
-    artist_popularity = st.slider("artist_popularity", 0, 100, 50)
-    valence = st.slider("valence", 0.0, 1.0, 0.50)
-    release_year = st.slider("release_year", 1950, 2025, 2020)
+    tempo = st.slider("tempo", 40.0, 220.0, 120.0, key=f"tempo_{st.session_state['reset_nonce']}")
+    artist_popularity = st.slider("artist_popularity", 0, 100, 50, key=f"apop_{st.session_state['reset_nonce']}")
+    valence = st.slider("valence", 0.0, 1.0, 0.50, key=f"val_{st.session_state['reset_nonce']}")
+    release_year = st.slider("release_year", 1950, 2025, 2020, key=f"year_{st.session_state['reset_nonce']}")
 
 with st.expander("Advanced (optional)", expanded=False):
-    use_exact_duration = st.checkbox("Enter exact duration (seconds)", value=False)
-    use_exact_followers = st.checkbox("Enter exact followers", value=False)
+    use_exact_duration = st.checkbox("Enter exact duration (seconds)", value=False, key=f"exdur_{st.session_state['reset_nonce']}")
+    use_exact_followers = st.checkbox("Enter exact followers", value=False, key=f"exfol_{st.session_state['reset_nonce']}")
 
     if use_exact_duration:
-        duration_sec = int(st.number_input("Exact duration (seconds)", min_value=1, max_value=36000, value=int(duration_sec), step=1))
+        duration_sec = int(st.number_input("Exact duration (seconds)", min_value=1, max_value=36000, value=int(duration_sec), step=1, key=f"dur_in_{st.session_state['reset_nonce']}"))
 
     if use_exact_followers:
-        followers_exact = int(st.number_input("Exact followers", min_value=0, max_value=2_000_000_000, value=int(artist_followers_k * 1000), step=1000))
+        followers_exact = int(st.number_input("Exact followers", min_value=0, max_value=2_000_000_000, value=int(artist_followers_k * 1000), step=1000, key=f"fol_in_{st.session_state['reset_nonce']}"))
         artist_followers_k = followers_exact // 1000
 
-    speechiness = st.slider("speechiness", 0.0, 1.0, 0.05)
-    acousticness = st.slider("acousticness", 0.0, 1.0, 0.20)
-    instrumentalness = st.slider("instrumentalness", 0.0, 1.0, 0.00)
-    liveness = st.slider("liveness", 0.0, 1.0, 0.15)
+    speechiness = st.slider("speechiness", 0.0, 1.0, 0.05, key=f"sp_{st.session_state['reset_nonce']}")
+    acousticness = st.slider("acousticness", 0.0, 1.0, 0.20, key=f"ac_{st.session_state['reset_nonce']}")
+    instrumentalness = st.slider("instrumentalness", 0.0, 1.0, 0.00, key=f"ins_{st.session_state['reset_nonce']}")
+    liveness = st.slider("liveness", 0.0, 1.0, 0.15, key=f"liv_{st.session_state['reset_nonce']}")
 
 if "speechiness" not in locals():
     speechiness, acousticness, instrumentalness, liveness = 0.05, 0.20, 0.00, 0.15
@@ -167,7 +174,7 @@ X = X[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 st.divider()
 
-if st.button("Predict"):
+if st.button("Predict", key=f"pred_{st.session_state['reset_nonce']}"):
     if hasattr(model, "predict_proba"):
         hit_prob = float(model.predict_proba(X)[:, 1][0])
     else:
