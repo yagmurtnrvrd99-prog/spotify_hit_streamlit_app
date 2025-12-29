@@ -22,19 +22,12 @@ def load_artifacts():
 model, meta, GENRE_FREQ_MAP = load_artifacts()
 
 TH = float(meta.get("threshold", 0.67))
-FEATURES = (
-    meta.get("feature_columns")
-    or meta.get("model_feature_columns")
-    or meta.get("columns")
-    or meta.get("feature_names")
-)
-
+FEATURES = meta.get("feature_columns", [])
 if not FEATURES:
-    st.error("Feature list not found in artifacts/meta.json")
+    st.error("feature_columns not found in artifacts/meta.json")
     st.stop()
-
 if "track_genre_freq" not in FEATURES:
-    st.error("Model does not include track_genre_freq. Retrain/export with this feature.")
+    st.error("Model does not include track_genre_freq.")
     st.stop()
 
 st.set_page_config(page_title="Spotify Hit Predictor", layout="wide")
@@ -61,10 +54,55 @@ if st.button("Reset"):
             del st.session_state[k]
     st.rerun()
 
+super_map = {
+    "rock": "Rock/Metal", "alt-rock": "Rock/Metal", "alternative": "Rock/Metal",
+    "hard-rock": "Rock/Metal", "punk": "Rock/Metal", "punk-rock": "Rock/Metal",
+    "metal": "Rock/Metal", "black-metal": "Rock/Metal", "death-metal": "Rock/Metal",
+    "metalcore": "Rock/Metal", "grunge": "Rock/Metal", "industrial": "Rock/Metal",
+    "rock-n-roll": "Rock/Metal", "rockabilly": "Rock/Metal", "hardcore": "Rock/Metal",
+    "psych-rock": "Rock/Metal", "emo": "Rock/Metal", "garage": "Rock/Metal",
+
+    "pop": "Pop", "indie-pop": "Pop", "synth-pop": "Pop", "pop-film": "Pop",
+    "k-pop": "Pop", "j-pop": "Pop", "mandopop": "Pop", "cantopop": "Pop",
+    "british": "Pop",
+
+    "hip-hop": "Hip-Hop/R&B", "rap": "Hip-Hop/R&B", "r-n-b": "Hip-Hop/R&B",
+    "soul": "Hip-Hop/R&B", "funk": "Hip-Hop/R&B",
+
+    "edm": "Electronic/Dance", "electronic": "Electronic/Dance", "electro": "Electronic/Dance",
+    "house": "Electronic/Dance", "deep-house": "Electronic/Dance",
+    "techno": "Electronic/Dance", "detroit-techno": "Electronic/Dance", "chicago-house": "Electronic/Dance",
+    "drum-and-bass": "Electronic/Dance", "dubstep": "Electronic/Dance",
+    "dance": "Electronic/Dance", "club": "Electronic/Dance", "disco": "Electronic/Dance",
+
+    "acoustic": "Acoustic/Folk/Country", "folk": "Acoustic/Folk/Country",
+    "country": "Acoustic/Folk/Country", "bluegrass": "Acoustic/Folk/Country",
+    "singer-songwriter": "Acoustic/Folk/Country", "songwriter": "Acoustic/Folk/Country",
+
+    "latin": "Latin/Reggae", "latino": "Latin/Reggae", "reggaeton": "Latin/Reggae",
+    "reggae": "Latin/Reggae", "dancehall": "Latin/Reggae", "brazil": "Latin/Reggae",
+
+    "classical": "Classical/Jazz", "piano": "Classical/Jazz", "jazz": "Classical/Jazz",
+    "ambient": "Classical/Jazz", "new-age": "Classical/Jazz",
+
+    "anime": "Other", "disney": "Other", "children": "Other", "comedy": "Other",
+}
+
 genres = sorted(GENRE_FREQ_MAP.keys())
+supergenres = sorted(set(super_map.get(g, "Other") for g in genres))
 
 st.header("Genre Selection")
-chosen_genre = st.selectbox("track_genre", genres, index=0)
+g1, g2 = st.columns(2)
+
+with g1:
+    default_super = "Pop" if "Pop" in supergenres else supergenres[0]
+    chosen_super = st.selectbox("Super genre", supergenres, index=supergenres.index(default_super))
+
+with g2:
+    sub_list = [g for g in genres if super_map.get(g, "Other") == chosen_super]
+    sub_list = sub_list if sub_list else genres
+    chosen_genre = st.selectbox("track_genre", sub_list, index=0)
+
 track_genre_freq = float(GENRE_FREQ_MAP.get(chosen_genre, 0.0))
 
 st.header("Basic Features")
